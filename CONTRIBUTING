@@ -1,0 +1,61 @@
+# Contributing to Peek Client
+
+## Development Setup
+
+```bash
+git clone https://github.com/0xSandiem/peek_client.git
+cd peek_client
+pip install -r requirements.txt
+cd client && pnpm install && cd ..
+cp .env.example .env
+./build.sh
+python manage.py runserver 8000
+```
+
+## Running Tests
+
+```bash
+# Backend tests
+pytest tests/
+
+# Frontend tests
+cd client && pnpm test
+```
+
+## Code Style
+
+- Python: Black, Flake8, isort
+- TypeScript: ESLint, Prettier
+- Format before committing: `black backend/ tests/` and `cd client && pnpm lint --fix`
+
+## Commit Conventions
+
+Follow Conventional Commits format:
+
+```
+feat(scope): add new feature
+fix(scope): fix bug
+docs(scope): update documentation
+build(scope): update dependencies
+chore(scope): update configuration
+```
+
+Examples:
+- `feat(client): add image preview`
+- `fix(proxy): handle large file uploads`
+- `docs(readme): update Docker instructions`
+
+## Pull Request Process
+
+1. Create feature branch from `main`
+2. Write tests for new features
+3. Ensure all tests pass
+4. Update documentation if needed
+5. Create PR with clear description
+6. Wait for review
+
+## Code Review
+
+- PRs require one approval
+- All CI checks must pass
+- Address review comments promptly
