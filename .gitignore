@@ -49,6 +49,9 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Allow Next.js lib directory
+!client/lib/
+
 # PyInstaller
 *.manifest
 *.spec
