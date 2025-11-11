@@ -1,0 +1,44 @@
+# Full Stack Docker Compose
+# Runs peek_client and connects to peek_api services
+#
+# Prerequisites:
+# 1. peek_api must be running: cd /path/to/peek_api && docker-compose up -d
+# 2. Both projects must be on the same Docker network: peek_network
+#
+# Usage:
+#   docker-compose -f docker-compose.full.yml up -d
+
+version: "3.8"
+
+services:
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: peek_client_full
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-key-change-in-production}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      # Connect to Flask API running in Docker
+      FLASK_API_URL: http://peek_web:5000
+      ALLOWED_HOSTS: localhost,127.0.0.1,peek_client_full
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - peek_network
+
+  # Note: These services should already be running from peek_api
+  # This configuration assumes external services
+  # To include them here, copy services from peek_api/docker-compose.yml
+
+networks:
+  peek_network:
+    external: true
+    name: peek_network

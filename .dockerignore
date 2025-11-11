@@ -4,6 +4,8 @@ CLAUDE.md
 !.env.example
 .git
 .gitignore
+
+# Python
 *.pyc
 __pycache__
 *.pyo
@@ -17,8 +19,31 @@ build
 venv
 env
 .venv
+
+# Django
 staticfiles
+db.sqlite3
 *.log
+
+# Node.js / Next.js
+client/node_modules
+client/.next
+client/out
+static/react
+
+# Logs
+*.log
+logs/
+
+# OS
 .DS_Store
+*.swp
+*.swo
+
+# Documentation
 README.md
+README-*.md
+
+# Docker
 docker-compose.yml
+Dockerfile

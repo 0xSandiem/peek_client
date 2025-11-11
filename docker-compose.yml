@@ -2,22 +2,28 @@ version: "3.8"
 
 services:
   web:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: peek_client
-    command: python manage.py runserver 0.0.0.0:8000
     environment:
-      DJANGO_ENV: development
-      DEBUG: "True"
-      FLASK_API_URL: http://host.docker.internal:5001
-      ALLOWED_HOSTS: localhost,127.0.0.1
-      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5001
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-key-change-in-production}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      FLASK_API_URL: ${FLASK_API_URL:-http://host.docker.internal:5001}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,peek_client}
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app/backend
-      - ./static:/app/static
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - peek_network
+
+networks:
+  peek_network:
+    name: peek_network
+    driver: bridge
