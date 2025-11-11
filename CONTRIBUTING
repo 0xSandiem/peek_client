@@ -5,28 +5,56 @@
 ```bash
 git clone https://github.com/0xSandiem/peek_client.git
 cd peek_client
-pip install -r requirements.txt
-cd client && pnpm install && cd ..
+make install
 cp .env.example .env
-./build.sh
-python manage.py runserver 8000
+make build
+make dev
 ```
+
+## Pre-commit Hooks
+
+Install pre-commit hooks to automatically check code quality before commits:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+Run hooks manually on all files:
+
+```bash
+pre-commit run --all-files
+```
+
+The hooks will automatically run Black, Flake8, isort, ESLint, and Prettier checks.
 
 ## Running Tests
 
 ```bash
-# Backend tests
-pytest tests/
+# All tests
+make test
 
-# Frontend tests
-cd client && pnpm test
+# Backend tests only
+make test-django
+
+# Frontend tests only
+make test-react
 ```
 
 ## Code Style
 
 - Python: Black, Flake8, isort
 - TypeScript: ESLint, Prettier
-- Format before committing: `black backend/ tests/` and `cd client && pnpm lint --fix`
+
+Check code style:
+```bash
+make lint
+```
+
+Auto-format code:
+```bash
+make format
+```
 
 ## Commit Conventions
 
