@@ -2,6 +2,9 @@ FROM node:18-alpine AS frontend-builder
 
 WORKDIR /app
 
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
 COPY client/package.json client/pnpm-lock.yaml ./client/
 RUN npm install -g pnpm && cd client && pnpm install --frozen-lockfile
 
