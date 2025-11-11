@@ -26,7 +26,8 @@ COPY --from=frontend-builder /app/static/react /app/static/react
 RUN python manage.py collectstatic --noinput
 
 ENV PYTHONUNBUFFERED=1
+ENV PORT=8000
 
 EXPOSE 8000
 
-CMD ["gunicorn", "backend.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "30"]
+CMD gunicorn backend.wsgi:application --bind 0.0.0.0:${PORT} --workers 4 --timeout 30
