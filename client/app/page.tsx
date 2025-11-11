@@ -4,9 +4,9 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { uploadImage, pollResults, getImageUrl, type AnalysisResult } from "@/lib/api"
-import { ImageSlideshow } from "@/components/image-slideshow"
-import { LoadingSpinner } from "@/components/loading-spinner"
-import { ResultsDisplay } from "@/components/results-display"
+import { ImageSlideshow } from "@/components/ImageSlideshow"
+import { LoadingSpinner } from "@/components/LoadingSpinner"
+import { ResultsDisplay } from "@/components/ResultsDisplay"
 
 type ViewState = 'idle' | 'uploading' | 'analyzing' | 'results' | 'error'
 
