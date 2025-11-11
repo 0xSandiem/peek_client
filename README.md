@@ -462,21 +462,11 @@ docker build -t peek-client .
 docker run -p 8000:8000 --env-file .env peek-client
 ```
 
-## Advantages of This Architecture
-
-✓ **Single Port** - Everything on port 8000
-✓ **No CORS Issues** - Same origin for React and API
-✓ **Static React** - Fast, cacheable, CDN-ready
-✓ **Clean Separation** - Client code in `client/`, build in `static/react/`
-✓ **Hot Reload** - Dev mode with `pnpm dev` for React
-✓ **Production Ready** - Django serves optimized React build
-✓ **Simple Deployment** - One server to deploy
-
 ## Troubleshooting
 
 ### React Build Not Found
 
-If you see "🏗️ Build Required" page:
+If you see "Build Required" page:
 
 ```bash
 cd client
