@@ -12,7 +12,12 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
 DJANGO_ENV = os.environ.get("DJANGO_ENV", "development")
 DEBUG = os.environ.get("DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS_STR = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1")
+ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_STR.split(",") if host.strip()]
+
+if DJANGO_ENV == "production" and not DEBUG:
+    ALLOWED_HOSTS.append(".railway.app")
+    ALLOWED_HOSTS.append(".up.railway.app")
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
