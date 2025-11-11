@@ -1,126 +1,245 @@
-# Peek Client
+# Peek - Full-Stack Image Analysis Platform
 
-Django frontend application that serves as a proxy layer to the Peek API (Flask backend) and hosts the React-based user interface for image analysis.
+**True full-stack application** where Django serves the React frontend and proxies API requests to Flask backend.
+
+## System Architecture
+
+![Peek System Architecture](./diagram.png)
+
+## Architecture Overview
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     DJANGO (Port 8000)                       │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  Routes:                                               │ │
+│  │  /              → Serve React SPA                      │ │
+│  │  /api/*         → Proxy to Flask API                   │ │
+│  │  /health/       → Django health check                  │ │
+│  │  /_next/*       → React static assets                  │ │
+│  └────────────────────────────────────────────────────────┘ │
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  React Build: static/react/                            │ │
+│  │  - index.html (SPA entry point)                        │ │
+│  │  - _next/ (JS/CSS bundles)                             │ │
+│  │  - assets (images, fonts)                              │ │
+│  └────────────────────────────────────────────────────────┘ │
+└────────────────────────┬─────────────────────────────────────┘
+                         │
+                         │ API Proxy
+                         ▼
+                  ┌──────────────┐
+                  │  Flask API   │
+                  │  (Port 5001) │
+                  │  CV Engine   │
+                  └──────────────┘
+```
+
+**Single Port Architecture:**
+- **One server** (Django on port 8000)
+- **React SPA** served from `/`
+- **API calls** proxied to Flask via `/api/*`
+- **No CORS issues** (same origin)
+
+## Project Structure
+
+```
+peek_client/
+├── backend/                # Django application
+│   ├── settings.py        # Configuration
+│   ├── urls.py            # Routing (/api → proxy, /* → React)
+│   ├── views.py           # serve_react() + proxy_to_flask()
+│   ├── wsgi.py
+│   └── asgi.py
+│
+├── client/                # Next.js source code
+│   ├── app/              # Pages
+│   ├── components/       # React components
+│   ├── hooks/            # React hooks
+│   ├── lib/              # Utilities
+│   ├── public/           # Public assets
+│   ├── styles/           # CSS
+│   ├── package.json
+│   ├── next.config.mjs   # output: 'export', distDir: '../static/react'
+│   └── .env.local        # NEXT_PUBLIC_API_URL=http://localhost:8000
+│
+├── static/
+│   └── react/            # Next.js build output (auto-generated)
+│       ├── index.html    # React SPA entry
+│       ├── _next/        # JS/CSS bundles
+│       └── *.jpg/svg     # Static assets
+│
+├── scripts/
+│   └── entrypoint.sh     # Production startup
+│
+├── manage.py             # Django CLI
+├── build.sh              # Build script
+├── requirements.txt      # Python dependencies
+├── Dockerfile
+├── docker-compose.yml
+└── README.md
+```
 
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.9+
-- Peek API running (Flask backend)
+- Node.js 18+ with pnpm
+- Flask API running (peek_api repo)
 
-### Local Setup
+### Installation
 
 ```bash
 # Clone repository
 git clone https://github.com/0xSandiem/peek_client.git
 cd peek_client
 
-# Install dependencies
+# Install Python dependencies
 pip3 install -r requirements.txt
 
-# Set up environment
-cp .env.example .env
-# Edit .env with your configuration
+# Build React frontend
+./build.sh
+```
 
-# Run development server
+### Running the Application
+
+**Terminal 1 - Flask API (separate repo):**
+```bash
+cd /path/to/peek_api
+docker-compose up
+# Flask API runs on http://localhost:5001
+```
+
+**Terminal 2 - Full-Stack Django:**
+```bash
+python3 manage.py runserver 8000
+# Full app runs on http://localhost:8000
+```
+
+**Access:** http://localhost:8000
+
+## Docker Deployment
+
+### Using Docker Compose (Recommended)
+
+**1. Standalone Mode** (Flask API running separately):
+
+```bash
+# Copy environment file
+cp .env.docker .env
+
+# Edit .env if needed (FLASK_API_URL, etc.)
+nano .env
+
+# Build and run
+docker-compose up --build
+
+# Or run in detached mode
+docker-compose up -d --build
+```
+
+The client will be available at: http://localhost:8000
+
+**2. Full Stack Mode** (Connect to peek_api Docker network):
+
+First, start the peek_api containers:
+```bash
+cd /path/to/peek_api
+docker-compose up -d
+```
+
+Then update your `.env` file:
+```bash
+FLASK_API_URL=http://peek_web:5000
+```
+
+Start peek_client and connect to peek_api network:
+```bash
+docker-compose up -d --build
+docker network connect peek_network peek_client
+```
+
+### Docker Commands
+
+```bash
+# View logs
+docker-compose logs -f
+
+# Stop containers
+docker-compose down
+
+# Rebuild after code changes
+docker-compose up --build
+
+# View running containers
+docker ps
+
+# Execute commands in container
+docker exec -it peek_client bash
+
+# Check health
+curl http://localhost:8000/health/
+```
+
+### Environment Variables
+
+Configure in `.env` file (copy from `.env.docker`):
+
+```env
+# Django
+DJANGO_SECRET_KEY=your-secret-key
+DJANGO_DEBUG=False
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# Flask API Connection
+FLASK_API_URL=http://host.docker.internal:5001  # For host machine API
+# FLASK_API_URL=http://peek_web:5000            # For Docker network API
+```
+
+### Multi-Stage Build
+
+The Dockerfile uses multi-stage builds:
+
+1. **Stage 1 (frontend-builder)**:
+   - Node.js 18 Alpine
+   - Installs pnpm and dependencies
+   - Builds Next.js app to `static/react/`
+
+2. **Stage 2 (production)**:
+   - Python 3.9 Slim
+   - Copies built React app from Stage 1
+   - Installs Python dependencies
+   - Runs Django with Gunicorn
+
+This approach:
+- Keeps final image small (~200MB)
+- Caches dependencies for faster rebuilds
+- Builds everything in one `docker build`
+- Production-ready with Gunicorn
+
+## Development Workflow
+
+### Option 1: Full-Stack Mode (Production-like)
+
+Run everything from Django:
+
+```bash
+# 1. Build React
+cd client
+pnpm build
+cd ..
+
+# 2. Start Django (serves React + proxies API)
 python3 manage.py runserver 8000
 ```
 
-Application runs on `http://localhost:8000`
+Access at: http://localhost:8000
 
-## Architecture
+### Option 2: Development Mode (Hot Reload)
 
-### Minimalistic Django Proxy
-
-This Django application is intentionally minimal:
-- **No database** - Stateless proxy application
-- **No models** - Pure proxy and static file serving
-- **No authentication** - Handled by Flask API backend
-- **No migrations** - No database schema to manage
-
-### Request Flow
-
-```
-Browser → Django (Port 8000) → Flask API (Port 5001)
-   ↓
-React App (Static Files)
-```
-
-## API Endpoints
-
-### Health Check
-
-```bash
-GET /health/
-```
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "service": "peek_client"
-}
-```
-
-### API Proxy
-
-All `/api/*` requests are forwarded to the Flask API:
-
-```bash
-# Example: Analyze image
-curl -X POST http://localhost:8000/api/analyze \
-  -F "image=@/path/to/image.jpg"
-
-# Example: Get results
-curl http://localhost:8000/api/results/1
-```
-
-**Supported Methods:** GET, POST, PUT, DELETE
-
-### React Application
-
-```bash
-GET /*
-```
-
-Serves the React application for all other routes (client-side routing).
-
-## Configuration
-
-Environment variables (see `.env.example`):
-
-```bash
-DJANGO_ENV=development
-SECRET_KEY=your-secret-key-here
-DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
-FLASK_API_URL=http://localhost:5001
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5001
-```
-
-## Running with Docker
-
-### Docker Compose (Development)
-
-```bash
-docker-compose up
-```
-
-Runs Django on `http://localhost:8000`
-
-**Note:** Ensure Flask API is running at `http://localhost:5001` or update `FLASK_API_URL` in docker-compose.yml
-
-### Docker Build (Production)
-
-```bash
-docker build -t peek-client .
-docker run -p 8000:8000 --env-file .env peek-client
-```
-
-## Integration with Flask API
-
-### Local Development
+Separate servers for hot reload:
 
 **Terminal 1 - Flask API:**
 ```bash
@@ -128,272 +247,324 @@ cd /path/to/peek_api
 docker-compose up
 ```
 
-**Terminal 2 - Django Frontend:**
+**Terminal 2 - Django Proxy:**
 ```bash
-cd /path/to/peek_client
 python3 manage.py runserver 8000
 ```
 
-Access the application at `http://localhost:8000`
+**Terminal 3 - Next.js Dev Server:**
+```bash
+cd client
+pnpm dev
+```
 
-### Full Stack Testing
+Access at: http://localhost:3000
+
+## Building the Frontend
+
+### Automated Build
 
 ```bash
-# Check Django health
+./build.sh
+```
+
+This script:
+1. Installs Node dependencies (`pnpm install`)
+2. Builds Next.js (`pnpm build`)
+3. Exports to `static/react/`
+
+### Manual Build
+
+```bash
+cd client
+pnpm install
+pnpm build
+cd ..
+```
+
+### Build Configuration
+
+**client/next.config.mjs:**
+```javascript
+output: 'export',          // Static export (no Node.js server)
+distDir: '../static/react', // Build to Django's static folder
+images: { unoptimized: true }, // Works with static export
+trailingSlash: true,       // Better SPA routing
+```
+
+## How It Works
+
+### 1. Next.js Build Process
+
+```bash
+cd client
+pnpm build
+```
+
+Creates:
+```
+static/react/
+├── index.html          # SPA entry point
+├── 404.html           # Fallback page
+├── _next/
+│   ├── static/
+│   │   ├── chunks/    # JS bundles
+│   │   └── css/       # CSS files
+│   └── ...
+└── *.jpg, *.svg       # Public assets
+```
+
+### 2. Django Serves React
+
+**backend/urls.py:**
+```python
+urlpatterns = [
+    path("health/", health_check),
+    re_path(r"^api/(?P<path>.*)$", proxy_to_flask),  # API proxy
+    re_path(r"^(?P<path>.*)$", serve_react),         # React SPA (catch-all)
+]
+```
+
+**Request flow:**
+- `/` → `serve_react()` → serves `static/react/index.html`
+- `/_next/static/...` → serves JS/CSS from `static/react/_next/`
+- `/api/*` → `proxy_to_flask()` → forwards to Flask API
+- `/health/` → `health_check()` → Django health status
+
+### 3. API Integration
+
+**client/.env.local:**
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+React calls Django at the same origin:
+```typescript
+// client/lib/api.ts (example)
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+fetch(`${API_URL}/api/analyze`, {
+  method: 'POST',
+  body: formData
+})
+```
+
+Django proxies to Flask:
+```
+React → /api/analyze → Django → http://flask:5001/api/analyze → Flask
+```
+
+## Configuration
+
+### Django (.env)
+
+```bash
+DJANGO_ENV=development
+SECRET_KEY=your-secret-key
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+FLASK_API_URL=http://localhost:5001
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000
+```
+
+### Next.js (client/.env.local)
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+## API Endpoints
+
+All served from **http://localhost:8000**:
+
+### Django Endpoints
+
+```bash
+GET  /health/              # Django health check
+GET  /                     # React SPA
+GET  /_next/static/*       # React assets
+```
+
+### Proxied Flask Endpoints
+
+```bash
+POST /api/analyze          # Upload image → Flask
+GET  /api/results/:id      # Get results → Flask
+GET  /api/image/:id/original   # Get image → Flask
+GET  /api/image/:id/annotated  # Get annotated → Flask
+```
+
+## Testing
+
+### Test Full-Stack Setup
+
+```bash
+# Health check
 curl http://localhost:8000/health/
 
-# Check Flask API (via proxy)
+# React SPA
+curl http://localhost:8000/ | grep "PEEK"
+
+# API proxy (requires Flask running)
 curl http://localhost:8000/api/health
-
-# Upload image (via proxy)
-curl -X POST http://localhost:8000/api/analyze \
-  -F "image=@test_image.jpg"
-
-# Get results (via proxy)
-curl http://localhost:8000/api/results/1
 ```
 
-## React Frontend Integration
+### Test React Build
 
-### Adding React Build
-
-Once you have the React application from v0/Vercel:
-
-1. **Build the React application:**
-   ```bash
-   cd /path/to/react-app
-   npm run build
-   ```
-
-2. **Copy build to static directory:**
-   ```bash
-   cp -r build/* /path/to/peek_client/static/
-   ```
-
-3. **Collect static files (production):**
-   ```bash
-   python manage.py collectstatic --noinput
-   ```
-
-4. **Test:**
-   ```bash
-   python manage.py runserver 8000
-   # Visit http://localhost:8000
-   ```
-
-### Static File Structure
-
-```
-static/
-├── index.html          # React entry point
-├── asset-manifest.json
-├── manifest.json
-├── favicon.ico
-├── robots.txt
-└── static/
-    ├── css/
-    ├── js/
-    └── media/
+```bash
+cd client
+pnpm lint
+pnpm build
 ```
 
-## Deployment (Railway/Render)
+## Deployment
 
-### Setup Steps
+### Railway Deployment
 
-1. **Create Railway/Render Project**
-   - Connect GitHub repository
-   - Railway will auto-detect Python app
+**1. Build Configuration:**
 
-2. **Configure Environment Variables**
+Railway automatically detects Python and uses `Procfile`:
+
+```
+web: ./scripts/entrypoint.sh
+```
+
+**scripts/entrypoint.sh:**
+```bash
+#!/bin/bash
+cd client && pnpm install && pnpm build && cd ..
+python manage.py collectstatic --noinput
+gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT
+```
+
+**2. Environment Variables:**
 
 ```bash
 DJANGO_ENV=production
-SECRET_KEY=<generate-strong-random-key>
+SECRET_KEY=<strong-random-key>
 DEBUG=False
 ALLOWED_HOSTS=your-app.railway.app
 FLASK_API_URL=https://peek-api.railway.app
-CORS_ALLOWED_ORIGINS=https://your-app.railway.app
 ```
 
-3. **Deploy**
-   - Railway automatically uses `Procfile` and `nixpacks.toml`
-   - Web service runs `scripts/entrypoint.sh`
-   - Static files collected automatically
-
-### Environment Variables
-
-Set in **Railway/Render dashboard**:
+**3. Deploy:**
 
 ```bash
-DJANGO_ENV=production
-SECRET_KEY=${{secrets.DJANGO_SECRET}}
-FLASK_API_URL=${{peek-api.RAILWAY_PUBLIC_DOMAIN}}
-ALLOWED_HOSTS=<your-domain>.railway.app
+git push origin main
 ```
 
-### Health Check
+Railway builds Next.js and starts Django automatically.
 
-Verify deployment:
-```bash
-curl https://your-app.railway.app/health/
-```
-
-Expected response:
-```json
-{
-  "status": "ok",
-  "service": "peek_client"
-}
-```
-
-### Deployment Notes
-
-- **Static Files**: Automatically collected during build phase
-- **WhiteNoise**: Serves static files efficiently in production
-- **Gunicorn**: 4 workers, 30-second timeout
-- **Logs**: Available in Railway/Render dashboard
-- **No Database**: No migration or database setup needed
-
-## Project Structure
-
-```
-peek_client/
-├── backend/
-│   ├── settings.py          # Django configuration
-│   ├── urls.py              # URL routing
-│   ├── views.py             # Proxy and React serving
-│   ├── wsgi.py              # WSGI entry point
-│   └── asgi.py              # ASGI entry point
-├── static/                  # React build output
-├── staticfiles/             # Collected static files
-├── scripts/
-│   └── entrypoint.sh        # Deployment startup
-├── requirements.txt         # Python dependencies
-├── Dockerfile               # Container config
-├── docker-compose.yml       # Local dev setup
-├── Procfile                 # Railway/Render config
-├── runtime.txt              # Python version
-└── README.md                # This file
-```
-
-## Features
-
-### Proxy Capabilities
-
-- **Method Preservation**: Forwards GET, POST, PUT, DELETE
-- **Header Forwarding**: Preserves all relevant headers
-- **Body Handling**: Supports JSON, form data, file uploads
-- **Timeout Protection**: 30-second request timeout
-- **Error Handling**: Graceful handling of connection errors
-- **Image Support**: Special handling for image responses
-
-### Static File Serving
-
-- **WhiteNoise**: Efficient static file serving
-- **Compression**: Automatic gzip compression
-- **Caching**: Browser caching with manifest
-- **SPA Support**: Client-side routing for React
-
-### Security
-
-- **HTTPS Redirect**: Enabled in production
-- **Secure Cookies**: HTTPS-only in production
-- **XSS Protection**: Browser XSS filter enabled
-- **CORS**: Explicitly configured origins
-- **Content Security**: No MIME type sniffing
-
-## Development
-
-### Running Tests
+### Docker Deployment
 
 ```bash
-# Django tests (minimal, no database)
-python manage.py test
-
-# Check configuration
-python manage.py check
-
-# Collect static files
-python manage.py collectstatic --noinput
+docker build -t peek-client .
+docker run -p 8000:8000 --env-file .env peek-client
 ```
 
-### Debugging
+## Advantages of This Architecture
 
-Enable debug mode in `.env`:
-```bash
-DEBUG=True
-```
-
-View detailed error messages and Django debug toolbar.
-
-### Adding Features
-
-This is a minimal proxy application. For new features:
-- **API changes**: Modify in Flask backend
-- **UI changes**: Modify React frontend
-- **Proxy logic**: Update `backend/views.py`
-- **Configuration**: Add to `backend/settings.py`
+✓ **Single Port** - Everything on port 8000
+✓ **No CORS Issues** - Same origin for React and API
+✓ **Static React** - Fast, cacheable, CDN-ready
+✓ **Clean Separation** - Client code in `client/`, build in `static/react/`
+✓ **Hot Reload** - Dev mode with `pnpm dev` for React
+✓ **Production Ready** - Django serves optimized React build
+✓ **Simple Deployment** - One server to deploy
 
 ## Troubleshooting
 
-### Cannot Connect to Flask API
+### React Build Not Found
 
-**Error:** `Cannot connect to API`
+If you see "🏗️ Build Required" page:
 
-**Solution:**
 ```bash
-# Check Flask API is running
+cd client
+pnpm install
+pnpm build
+cd ..
+python3 manage.py runserver 8000
+```
+
+### Django Can't Find React Files
+
+Check that build output exists:
+
+```bash
+ls -la static/react/
+# Should show: index.html, _next/, etc.
+```
+
+### API Proxy Errors
+
+Ensure Flask API is running:
+
+```bash
 curl http://localhost:5001/api/health
-
-# Update FLASK_API_URL in .env
-FLASK_API_URL=http://localhost:5001
 ```
 
-### Static Files Not Found
+Update FLASK_API_URL in `.env` if needed.
 
-**Error:** `404 on /static/css/main.css`
+### Port Already in Use
 
-**Solution:**
 ```bash
-# Collect static files
-python manage.py collectstatic --noinput
+# Kill process on port 8000
+lsof -ti:8000 | xargs kill -9
 
-# Check STATIC_ROOT in settings.py
-# Verify files exist in staticfiles/
+# Or use different port
+python3 manage.py runserver 8080
 ```
 
-### CORS Errors
+## Project Commands
 
-**Error:** `CORS policy blocked`
+### Build & Run
 
-**Solution:**
 ```bash
-# Add origin to CORS_ALLOWED_ORIGINS in .env
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5001
+# Full build
+./build.sh
 
-# Restart Django server
+# Run server
+python3 manage.py runserver 8000
+
+# Quick rebuild
+cd client && pnpm build && cd ..
 ```
 
-### Deployment Fails
+### Development
 
-**Error:** `Application error on Railway`
-
-**Solution:**
 ```bash
-# Check logs in Railway dashboard
-# Verify environment variables are set
-# Ensure ALLOWED_HOSTS includes your domain
-# Check Procfile and entrypoint.sh permissions
+# Django check
+python3 manage.py check
+
+# React dev server (hot reload)
+cd client && pnpm dev
+
+# Linting
+cd client && pnpm lint
 ```
 
-## Contributing
+## Technology Stack
 
-This project uses **Gitflow** workflow:
-- `main` branch for production
-- `develop` branch for development
-- Feature branches: `feature/feature-name`
+**Frontend:**
+- Next.js 14.2.25 (static export)
+- React 19.2.0
+- Tailwind CSS
+- shadcn/ui components
 
-Commit message format: `type(scope): message`
+**Backend:**
+- Django 4.2.7 (proxy + static server)
+- WhiteNoise (static files)
+- Gunicorn (production)
+
+**API:**
+- Flask (separate repo: peek_api)
+- OpenCV (computer vision)
+- Celery + Redis (async tasks)
+
+## Related Repositories
+
+- **Flask API:** https://github.com/0xSandiem/peek_api
+- **Django Frontend:** https://github.com/0xSandiem/peek_client (this repo)
 
 ## License
 
